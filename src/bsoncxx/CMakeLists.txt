@@ -106,17 +106,13 @@ add_library(bsoncxx_static STATIC
 
 target_compile_definitions(bsoncxx_static PUBLIC BSONCXX_STATIC)
 
-set_target_properties(bsoncxx_static PROPERTIES
-    OUTPUT_NAME bsoncxx
-)
+# TODO CXX-1257: The below line can be removed once we've replaced FindLibBSON.cmake with a
+# dependency on libbson-static-1.0-config.cmake, which provides the definition for BSON_STATIC.
+target_compile_definitions(bsoncxx_static PUBLIC BSON_STATIC)
 
-# Follow the boost convention to disambiguate the dll and static
-# library names
-if (WIN32)
-    set_target_properties(bsoncxx_static PROPERTIES
-        PREFIX lib
-    )
-endif()
+set_target_properties(bsoncxx_static PROPERTIES
+    OUTPUT_NAME bsoncxx-static
+)
 
 add_library(bsoncxx SHARED
     ${bsoncxx_sources}
@@ -188,21 +184,23 @@ set(PACKAGE_LIBRARIES bsoncxx)
 
 include(CMakePackageConfigHelpers)
 
-configure_package_config_file(
-  cmake/libbsoncxx-config.cmake.in ${CMAKE_CURRENT_BINARY_DIR}/libbsoncxx-config.cmake
-  INSTALL_DESTINATION lib/cmake/libbsoncxx-${BSONCXX_VERSION}
-  PATH_VARS PACKAGE_INCLUDE_INSTALL_DIRS PACKAGE_LIBRARY_INSTALL_DIRS
-)
+foreach (pkg "libbsoncxx" "libbsoncxx-static")
+    configure_package_config_file(
+      cmake/${pkg}-config.cmake.in ${CMAKE_CURRENT_BINARY_DIR}/${pkg}-config.cmake
+      INSTALL_DESTINATION lib/cmake/${pkg}-${BSONCXX_VERSION}
+      PATH_VARS PACKAGE_INCLUDE_INSTALL_DIRS PACKAGE_LIBRARY_INSTALL_DIRS
+    )
 
-write_basic_package_version_file(
-  ${CMAKE_CURRENT_BINARY_DIR}/libbsoncxx-config-version.cmake
-  VERSION ${BSONCXX_VERSION}
-  COMPATIBILITY SameMajorVersion
-)
+    write_basic_package_version_file(
+      ${CMAKE_CURRENT_BINARY_DIR}/${pkg}-config-version.cmake
+      VERSION ${BSONCXX_VERSION}
+      COMPATIBILITY SameMajorVersion
+    )
 
-install(
-  FILES ${CMAKE_CURRENT_BINARY_DIR}/libbsoncxx-config.cmake ${CMAKE_CURRENT_BINARY_DIR}/libbsoncxx-config-version.cmake
-  DESTINATION lib/cmake/libbsoncxx-${BSONCXX_VERSION}
-)
+    install(
+      FILES ${CMAKE_CURRENT_BINARY_DIR}/${pkg}-config.cmake ${CMAKE_CURRENT_BINARY_DIR}/${pkg}-config-version.cmake
+      DESTINATION lib/cmake/${pkg}-${BSONCXX_VERSION}
+    )
+endforeach()
 
 add_subdirectory(test)
