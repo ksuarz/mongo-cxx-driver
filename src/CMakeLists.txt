@@ -14,6 +14,4 @@
 
 add_definitions(-DMONGO_CXX_DRIVER_COMPILING)
 add_subdirectory(bsoncxx)
-# TODO CXX-1257: Start building mongocxx again once it's updated to work with new bsoncxx static
-# library config files.
-# add_subdirectory(mongocxx)
+add_subdirectory(mongocxx)
