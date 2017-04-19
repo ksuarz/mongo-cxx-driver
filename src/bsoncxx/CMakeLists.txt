@@ -99,8 +99,6 @@ include_directories(
     ${CMAKE_BINARY_DIR}/src
 )
 
-link_directories(${BSON_LIBRARY_DIRS})
-
 if (BSONCXX_POLY_USE_BOOST)
     find_package(Boost 1.56.0 REQUIRED)
 endif()
