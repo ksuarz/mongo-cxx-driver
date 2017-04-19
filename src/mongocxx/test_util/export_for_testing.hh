@@ -1,4 +1,4 @@
-// Copyright 2014 MongoDB Inc.
+// Copyright 2017 MongoDB Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,22 +12,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "libmongoc.hh"
+#pragma once
 
 #include <mongocxx/config/private/prelude.hh>
 
-namespace mongocxx {
-MONGOCXX_INLINE_NAMESPACE_BEGIN
-namespace libmongoc {
+// See comment at src/bsoncxx/test_util/export_for_testing.hh for an explanation of the purpose of
+// this header.
 
 #ifdef MONGOCXX_TESTING
-#define MONGOCXX_LIBMONGOC_SYMBOL(name)               \
-    MONGOCXX_API test_util::mock<decltype(&mongoc_##name)>& name = \
-        *new test_util::mock<decltype(&mongoc_##name)>(mongoc_##name);
-#include "libmongoc_symbols.hh"
-#undef MONGOCXX_LIBMONGOC_SYMBOL
-#endif  // MONGOCXX_TESTING
+#define MONGOCXX_TEST_API MONGOCXX_API
+#else
+#define MONGOCXX_TEST_API
+#endif
 
-}  // namespace libmongoc
-MONGOCXX_INLINE_NAMESPACE_END
-}  // namespace mongocxx
+#include <mongocxx/config/private/postlude.hh>
