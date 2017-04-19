@@ -27,6 +27,7 @@ if (CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
 endif()
 
 add_subdirectory(bsoncxx)
+add_subdirectory(mongocxx)
 
 add_custom_target(examples DEPENDS ${MONGOCXX_EXAMPLE_EXECUTABLES} ${BSONCXX_EXAMPLE_EXECUTABLES})
 
