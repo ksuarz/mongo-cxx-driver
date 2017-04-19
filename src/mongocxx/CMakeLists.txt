@@ -14,13 +14,14 @@
 
 project(MONGOCXX)
 
-set(LIBBSON_REQUIRED_VERSION 1.7.0)
-set(LIBBSON_REQUIRED_ABI_VERSION 1.0)
-find_package(LibBSON ${LIBBSON_REQUIRED_VERSION} REQUIRED)
-
 set(LIBMONGOC_REQUIRED_VERSION 1.7.0)
 set(LIBMONGOC_REQUIRED_ABI_VERSION 1.0)
-find_package(LibMongoC ${LIBMONGOC_REQUIRED_VERSION} REQUIRED)
+
+if (BUILD_SHARED_LIBS)
+    find_package(libmongoc-${LIBMONGOC_REQUIRED_ABI_VERSION} ${LIBMONGOC_REQUIRED_VERSION} REQUIRED)
+else()
+    find_package(libmongoc-static-${LIBMONGOC_REQUIRED_ABI_VERSION} ${LIBMONGOC_REQUIRED_VERSION} REQUIRED)
+endif()
 
 # Update these as needed.
 # TODO: read from file
@@ -32,7 +33,8 @@ set(MONGOCXX_ABI_VERSION _noabi)
 
 option(MONGOCXX_ENABLE_SSL "Enable SSL - if the underlying C driver offers it" ON)
 
-set(MONGOCXX_VERSION ${MONGOCXX_VERSION_MAJOR}.${MONGOCXX_VERSION_MINOR}.${MONGOCXX_VERSION_PATCH}${MONGOCXX_VERSION_EXTRA})
+set(MONGOCXX_VERSION_NO_EXTRA ${MONGOCXX_VERSION_MAJOR}.${MONGOCXX_VERSION_MINOR}.${MONGOCXX_VERSION_PATCH})
+set(MONGOCXX_VERSION ${MONGOCXX_VERSION_NO_EXTRA}${MONGOCXX_VERSION_EXTRA})
 set(MONGOCXX_INLINE_NAMESPACE "v${MONGOCXX_ABI_VERSION}")
 set(MONGOCXX_HEADER_INSTALL_DIR "include/mongocxx/${MONGOCXX_INLINE_NAMESPACE}" CACHE INTERNAL "")
 
@@ -102,64 +104,57 @@ set(mongocxx_sources
 )
 
 include_directories(
-    ${LIBBSON_INCLUDE_DIRS}
-    ${LIBMONGOC_INCLUDE_DIRS}
+    ${MONGOC_INCLUDE_DIRS}
     ${CMAKE_SOURCE_DIR}/src
     ${CMAKE_BINARY_DIR}/src
 )
 
-link_directories(
-  ${LIBBSON_LIBRARY_DIRS}
-  ${LIBMONGOC_LIBRARY_DIRS}
-)
-
-add_library(mongocxx_static STATIC
+add_library(mongocxx
     ${mongocxx_sources}
 )
-
-target_compile_definitions(mongocxx_static PUBLIC MONGOCXX_STATIC)
-
-set_target_properties(mongocxx_static PROPERTIES
-    OUTPUT_NAME mongocxx
+add_library(mongocxx_mocked
+    ${mongocxx_sources}
 )
+target_compile_definitions(mongocxx_mocked PUBLIC MONGOCXX_TESTING)
 
-# Follow the boost convention to disambiguate the dll and static
-# library names
-if (WIN32)
-    set_target_properties(mongocxx_static PROPERTIES
-        PREFIX lib
+if (BUILD_SHARED_LIBS)
+    set_target_properties (mongocxx PROPERTIES
+        OUTPUT_NAME mongocxx
+        VERSION ${MONGOCXX_VERSION}
+        DEFINE_SYMBOL MONGOCXX_EXPORTS
+        CXX_VISIBILITY_PRESET hidden
+        VISIBILITY_INLINES_HIDDEN ON
+        SOVERSION ${MONGOCXX_ABI_VERSION}
+    )
+
+    set_target_properties (mongocxx_mocked PROPERTIES
+        OUTPUT_NAME mongocxx-mocked
+        VERSION ${MONGOCXX_VERSION}
+        DEFINE_SYMBOL MONGOCXX_EXPORTS
+        CXX_VISIBILITY_PRESET hidden
+        VISIBILITY_INLINES_HIDDEN ON
+        SOVERSION ${MONGOCXX_ABI_VERSION}
+    )
+else()
+    target_compile_definitions(mongocxx PUBLIC MONGOCXX_STATIC)
+    target_compile_definitions(mongocxx_mocked PUBLIC MONGOCXX_STATIC)
+
+    set_target_properties(mongocxx PROPERTIES
+        OUTPUT_NAME mongocxx-static
+    )
+    set_target_properties(mongocxx_mocked PROPERTIES
+        OUTPUT_NAME mongocxx-mocked
     )
 endif()
 
-add_library(mongocxx_mocked STATIC
-    ${mongocxx_sources}
+generate_export_header(mongocxx
+    BASE_NAME MONGOCXX
+    EXPORT_MACRO_NAME MONGOCXX_API
+    NO_EXPORT_MACRO_NAME MONGOCXX_PRIVATE
+    EXPORT_FILE_NAME config/export.hpp
+    STATIC_DEFINE MONGOCXX_STATIC
 )
-
-target_compile_definitions(mongocxx_mocked PUBLIC MONGOCXX_STATIC MONGOCXX_TESTING)
-
-if (CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
-    target_compile_options(mongocxx_mocked PRIVATE /bigobj)
-endif()
-
-set_target_properties(mongocxx_mocked PROPERTIES
-    OUTPUT_NAME mongocxx_mocked
-    VERSION ${MONGOCXX_VERSION}
-)
-
-add_library(mongocxx SHARED
-    ${mongocxx_sources}
-)
-
-set_target_properties (mongocxx PROPERTIES
-    OUTPUT_NAME mongocxx
-    VERSION ${MONGOCXX_VERSION}
-    DEFINE_SYMBOL MONGOCXX_EXPORTS
-    CXX_VISIBILITY_PRESET hidden
-    VISIBILITY_INLINES_HIDDEN ON
-    SOVERSION ${MONGOCXX_ABI_VERSION}
-)
-
-generate_export_header (mongocxx
+generate_export_header(mongocxx_mocked
     BASE_NAME MONGOCXX
     EXPORT_MACRO_NAME MONGOCXX_API
     NO_EXPORT_MACRO_NAME MONGOCXX_PRIVATE
@@ -167,11 +162,14 @@ generate_export_header (mongocxx
     STATIC_DEFINE MONGOCXX_STATIC
 )
 
-set(mongocxx_libs ${LIBMONGOC_LIBRARIES} ${LIBBSON_LIBRARIES})
-
-target_link_libraries(mongocxx_static bsoncxx_static ${mongocxx_libs})
-target_link_libraries(mongocxx_mocked bsoncxx_static ${mongocxx_libs})
-target_link_libraries(mongocxx PUBLIC bsoncxx PRIVATE ${mongocxx_libs})
+set(mongocxx_libs ${MONGOC_LIBRARIES})
+if (BUILD_SHARED_LIBS)
+    target_link_libraries(mongocxx PUBLIC bsoncxx PRIVATE ${mongocxx_libs})
+    target_link_libraries(mongocxx_mocked PUBLIC bsoncxx PRIVATE ${mongocxx_libs})
+else()
+    target_link_libraries(mongocxx bsoncxx ${mongocxx_libs})
+    target_link_libraries(mongocxx_mocked bsoncxx ${mongocxx_libs})
+endif()
 
 install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
     DESTINATION ${MONGOCXX_HEADER_INSTALL_DIR}
@@ -193,12 +191,12 @@ if (BUILD_SHARED_LIBS)
         LIBRARY DESTINATION lib COMPONENT runtime
         ARCHIVE DESTINATION lib COMPONENT dev
     )
+else()
+    install(TARGETS
+        mongocxx
+        ARCHIVE DESTINATION lib COMPONENT dev
+    )
 endif()
-
-install(TARGETS
-    mongocxx_static
-    ARCHIVE DESTINATION lib COMPONENT dev
-)
 
 set(PACKAGE_INCLUDE_INSTALL_DIRS ${MONGOCXX_HEADER_INSTALL_DIR})
 set(PACKAGE_LIBRARY_INSTALL_DIRS lib)
@@ -206,21 +204,27 @@ set(PACKAGE_LIBRARIES mongocxx)
 
 include(CMakePackageConfigHelpers)
 
+if (BUILD_SHARED_LIBS)
+    set(pkg "libmongocxx")
+else()
+    set(pkg "libmongocxx-static")
+endif()
+
 configure_package_config_file(
-  cmake/libmongocxx-config.cmake.in ${CMAKE_CURRENT_BINARY_DIR}/libmongocxx-config.cmake
-  INSTALL_DESTINATION lib/cmake/libmongocxx-${MONGOCXX_VERSION}
+  cmake/${pkg}-config.cmake.in ${CMAKE_CURRENT_BINARY_DIR}/${pkg}-config.cmake
+  INSTALL_DESTINATION lib/cmake/${pkg}-${MONGOCXX_VERSION}
   PATH_VARS PACKAGE_INCLUDE_INSTALL_DIRS PACKAGE_LIBRARY_INSTALL_DIRS
 )
 
 write_basic_package_version_file(
-  ${CMAKE_CURRENT_BINARY_DIR}/libmongocxx-config-version.cmake
+  ${CMAKE_CURRENT_BINARY_DIR}/${pkg}-config-version.cmake
   VERSION ${MONGOCXX_VERSION}
   COMPATIBILITY SameMajorVersion
 )
 
 install(
-  FILES ${CMAKE_CURRENT_BINARY_DIR}/libmongocxx-config.cmake ${CMAKE_CURRENT_BINARY_DIR}/libmongocxx-config-version.cmake
-  DESTINATION lib/cmake/libmongocxx-${MONGOCXX_VERSION}
+  FILES ${CMAKE_CURRENT_BINARY_DIR}/${pkg}-config.cmake ${CMAKE_CURRENT_BINARY_DIR}/${pkg}-config-version.cmake
+  DESTINATION lib/cmake/${pkg}-${MONGOCXX_VERSION}
 )
 
 add_subdirectory(test)
